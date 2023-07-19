@@ -1,11 +1,11 @@
 use piston_window::{Glyphs, PistonWindow};
 use rand::Rng;
 
-use crate::render::{render_text, WindowCoordinates, clear_screen};
+use crate::render::{render_text, WindowCoordinates, clear_screen, render_submap_matrix, render_borders};
 use crate::snake::{Snake, Direction};
 use crate::map::{Map, Location, Block};
 use crate::apple::Apple;
-use crate::utils::Drawable;
+use crate::render::Drawable;
 use crate::consts::*;
 
 
@@ -66,14 +66,26 @@ impl GameManager {
             return;
         }
 
-        self.snake.advance();
+        // Update the snake
 
-        // Check for collisions
+        // Extract the submap around the snake's head
+        self.snake.sight = Box::new(self.map.get_submap(self.snake.bits[0]));
+
+        match self.snake.advance_and_update_map(&mut self.map) {
+            Ok(..) => {},
+            Err(..) => {
+                // Snake collided with the wall
+                self.game_over();
+                return;
+            }
+        }
+
+        // Check for other collisions
 
         // Snake collided with itself
-        let head = self.snake.bits.first().unwrap();
+        let head = self.snake.bits[0];
         for bit in self.snake.bits.iter().skip(1) {
-            if bit == head {
+            if *bit == head {
                 self.game_over();
                 return;
             }
@@ -81,20 +93,10 @@ impl GameManager {
 
         // Snake collided with the apple
         if let Some(apple) = &self.apple {
-            if self.snake.bits.first().unwrap() == &apple.location {
+            if self.snake.bits[0] == apple.location {
                 self.snake.add_bit();
+                self.map.free_block(apple.location);
                 self.apple = None;
-            }
-        }
-
-        // Snake collided with the wall
-        if let Some(head) = self.snake.bits.first() {
-            match self.map.blocks[head.y][head.x] {
-                Block::Wall => {
-                    self.game_over();
-                    return;
-                },
-                _ => {}
             }
         }
 
@@ -119,6 +121,7 @@ impl GameManager {
                 }
 
                 self.apple = Some(Apple::new(location));
+                self.map.set_apple_block(location);
                 break;
             }
         }
@@ -226,6 +229,39 @@ impl Drawable for GameManager {
             _ => {}
             
         }
+
+        // Draw the submap on the side panel
+
+        let submap_start_x = SIDE_PANEL_START_X + 50.0;
+        let submap_start_y = MAP_START_Y + FONT_SIZE as f64 + 50.0;
+        
+        render_text(
+            "Input",
+            &mut self.font,
+            WindowCoordinates::new(submap_start_x, submap_start_y - FONT_SIZE as f64),
+            window,
+            event
+        );
+
+        render_borders(
+            submap_start_x, 
+            submap_start_y,
+            submap_start_x + SUBMAP_BLOCK_SIZE * SIGHT_SIZE as f64,
+            submap_start_y + SUBMAP_BLOCK_SIZE * SIGHT_SIZE as f64,
+            SUBMAP_BORDER_THICKNESS,
+            SUBMAP_BORDER_COLOR,
+            window,
+            event
+        );
+
+        render_submap_matrix(
+            &self.snake.sight,
+            WindowCoordinates::new(submap_start_x, submap_start_y),
+            window,
+            event
+        );
+
+        
 
     }
 

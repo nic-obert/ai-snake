@@ -8,6 +8,7 @@ pub const WORLD_HEIGHT: usize = 70;
 pub const WORLD_WIDTH: usize = 70;
 pub const BLOCK_SIZE: f64 = 8.0;
 
+
 // Window constants
 
 pub const WIN_TITLE: &str = "Snake";
@@ -22,9 +23,15 @@ macro_rules! font_path {
 pub const FONT_SIZE: u32 = 24;
 
 pub const TOPBAR_HEIGHT: f64 = 50.0;
+pub const SIDE_PANEL_WIDTH: f64 = 300.0;
+pub const SIDE_PANEL_START_X: f64 = WORLD_WIDTH as f64 * BLOCK_SIZE;
 
-pub const WIN_WIDTH: f64 = WORLD_WIDTH as f64 * BLOCK_SIZE;
+pub const SUBMAP_BLOCK_SIZE: f64 = 20.0;
+pub const SUBMAP_BORDER_THICKNESS: f64 = 5.0;
+
+pub const WIN_WIDTH: f64 = SIDE_PANEL_WIDTH + WORLD_WIDTH as f64 * BLOCK_SIZE;
 pub const WIN_HEIGHT: f64 = TOPBAR_HEIGHT + WORLD_HEIGHT as f64 * BLOCK_SIZE;
+
 
 // Colors
 
@@ -35,9 +42,17 @@ pub const WALL_COLOR: Color = [0.8, 0.8, 0.8, 1.0];
 pub const VOID_COLOR: Color = BACKGROUND_COLOR;
 pub const APPLE_COLOR: Color = [1.0, 0.0, 0.0, 1.0];
 pub const TEXT_COLOR: Color = [1.0, 1.0, 1.0, 1.0];
+pub const SUBMAP_BORDER_COLOR: Color = [0.5, 0.5, 0.5, 1.0];
+
 
 // Game constants
 
 pub const STEPS_PER_SECOND: f64 = 15.0;
 pub const UPDATE_DEALY: f64 = 1.0 / STEPS_PER_SECOND;
+
+
+// Snake AI constants
+
+pub const SIGHT_RADIUS: usize = 3;
+pub const SIGHT_SIZE: usize = 1 + SIGHT_RADIUS * 2;
 

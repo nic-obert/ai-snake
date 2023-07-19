@@ -3,11 +3,10 @@ use opengl_graphics::GlGraphics;
 use piston::RenderArgs;
 use piston_window::PistonWindow;
 
-use crate::map::Location;
-use crate::render::render_block;
-use crate::utils::Drawable;
+use crate::brain::Brain;
+use crate::map::{Location, Map, Block, SubmapMatrix};
+use crate::render::{render_block, Drawable, WindowCoordinates};
 use crate::consts::*;
-
 
 
 pub enum Direction {
@@ -24,7 +23,9 @@ pub struct Snake {
 
     pub length: usize,
     direction: Direction,
-    pub bits: Vec<Location>
+    pub bits: Vec<Location>,
+    brain: Brain,
+    pub sight: Box<SubmapMatrix>,
 
 }
 
@@ -35,7 +36,9 @@ impl Snake {
         Snake {
             length: 1,
             direction: Direction::Up,
-            bits: vec![location]
+            bits: vec![location],
+            brain: Brain::new(),
+            sight: Box::new([[Block::Void; SIGHT_SIZE]; SIGHT_SIZE]),
         }
     }
 
@@ -51,14 +54,19 @@ impl Snake {
     }
 
 
-    pub fn advance(&mut self) {
+    pub fn advance_and_update_map(&mut self, map: &mut Map) -> Result<(), ()> {
+
+        // Remove the last bit of the snake from the map
+        let last_bit = self.bits.last().unwrap();
+        map.free_block(*last_bit);
+
         // Move the body of the snake first
         for i in (1..self.length).rev() {
             self.bits[i] = self.bits[i - 1];
         }
 
         // Lastly, move the head
-        let head = self.bits.first_mut().unwrap();
+        let head = &mut self.bits[0];
         match self.direction {
             Direction::Up => {
                 head.y -= 1;
@@ -73,6 +81,16 @@ impl Snake {
                 head.x += 1;
             }
         }
+
+        // Check if the snake collided with the wall
+        if map.get(*head) == Block::Wall {
+            return Err(());
+        }
+
+        // Occupy the new location of the head
+        map.set_snake_block(*head);
+
+        Ok(())
     }
 
 }
@@ -85,12 +103,22 @@ impl Drawable for Snake {
         gl.draw(args.viewport(), |context: Context, gl: &mut GlGraphics| {
 
             // Draw the head first, as it is of a different color
-            let head = self.bits.first().unwrap();
-            render_block(HEAD_COLOR, *head, &context, gl);
+            let head = self.bits[0];
+            render_block(
+                HEAD_COLOR,
+                WindowCoordinates::from_map_location(head),
+                &context,
+                gl
+            );
 
             // Draw the rest of the snake
             for bit in self.bits.iter().skip(1) {
-                render_block(BODY_COLOR, *bit, &context, gl);
+                render_block(
+                    BODY_COLOR,
+                    WindowCoordinates::from_map_location(*bit),
+                    &context,
+                    gl
+                );
             }
 
         })

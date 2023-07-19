@@ -1,20 +1,21 @@
 mod consts;
 mod map;
 mod snake;
-mod utils;
 mod game_manager;
 mod apple;
 mod render;
+mod brain;
+
 
 use opengl_graphics::{GlGraphics, OpenGL, TextureSettings};
-use piston::ButtonEvent;
+use piston::{ButtonEvent, EventLoop};
 use piston::event_loop::{EventSettings, Events};
 use piston::input::{RenderEvent, UpdateEvent};
 use piston::window::WindowSettings;
 
 use consts::*;
 use piston_window::{Glyphs, PistonWindow};
-use utils::Drawable;
+use render::Drawable;
 
 
 fn main() {
@@ -37,7 +38,8 @@ fn main() {
    
     let mut game_manager = game_manager::GameManager::new(glyphs);
 
-    let event_settings = EventSettings::new();
+    let event_settings = EventSettings::new()
+        .lazy(false);
     let mut events = Events::new(event_settings);
 
     while let Some(event) = events.next(&mut window) {
