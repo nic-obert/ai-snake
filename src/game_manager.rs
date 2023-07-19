@@ -1,5 +1,7 @@
+use piston_window::{Glyphs, PistonWindow};
 use rand::Rng;
 
+use crate::render::{render_text, WindowCoordinates, clear_screen};
 use crate::snake::{Snake, Direction};
 use crate::map::{Map, Location, Block};
 use crate::apple::Apple;
@@ -7,20 +9,30 @@ use crate::utils::Drawable;
 use crate::consts::*;
 
 
+enum GameStatus {
+
+    GameOver,
+    Running,
+    Paused,
+
+}
+
+
 pub struct GameManager {
 
-    game_over: bool,
+    game_status: GameStatus,
     pub snake: Snake,
     map: Map,
     apple: Option<Apple>,
     last_update: f64,
+    font: Glyphs,
 
 }
 
 
 impl GameManager {
 
-    pub fn new() -> Self {
+    pub fn new(font: Glyphs) -> Self {
 
         let snake_x = WORLD_WIDTH / 2;
         let snake_y = WORLD_HEIGHT / 2;
@@ -29,11 +41,12 @@ impl GameManager {
         let map = Map::new();
 
         GameManager {
-            game_over: false,
+            game_status: GameStatus::Running,
             snake,
             map,
             apple: None,
             last_update: 0.0,
+            font,
         }
     }
 
@@ -48,9 +61,9 @@ impl GameManager {
             return;
         }
 
-        if self.game_over {
+        // Don't update the game if it's not running
+        if !matches!(self.game_status, GameStatus::Running) {
             return;
-            // TODO: add a game over screen
         }
 
         self.snake.advance();
@@ -61,7 +74,7 @@ impl GameManager {
         let head = self.snake.bits.first().unwrap();
         for bit in self.snake.bits.iter().skip(1) {
             if bit == head {
-                self.game_over = true;
+                self.game_over();
                 return;
             }
         }
@@ -78,7 +91,7 @@ impl GameManager {
         if let Some(head) = self.snake.bits.first() {
             match self.map.blocks[head.y][head.x] {
                 Block::Wall => {
-                    self.game_over = true;
+                    self.game_over();
                     return;
                 },
                 _ => {}
@@ -114,28 +127,51 @@ impl GameManager {
 
 
     pub fn handle_input(&mut self, args: &piston::ButtonArgs) {
+        use piston::input::Key;
+
         if args.state == piston::input::ButtonState::Press {
             match args.button {
                 piston::input::Button::Keyboard(key) => {
                     match key {
-                        piston::input::Key::W => {
-                            self.snake.set_direction(Direction::Up)
-                        },
-                        piston::input::Key::S => {
-                            self.snake.set_direction(Direction::Down)
-                        },
-                        piston::input::Key::A => {
-                            self.snake.set_direction(Direction::Left)
-                        },
-                        piston::input::Key::D => {
-                            self.snake.set_direction(Direction::Right)
-                        },
+                        Key::W => self.snake.set_direction(Direction::Up),
+                            
+                        Key::S => self.snake.set_direction(Direction::Down),
+
+                        Key::A => self.snake.set_direction(Direction::Left),
+
+                        Key::D => self.snake.set_direction(Direction::Right),
+                        
+                        Key::Space => match self.game_status {
+                            GameStatus::Running => self.pause(),
+                            GameStatus::Paused => self.run(),
+                            _ => {}
+                        }
+                        
+                        // Unhandled keys
                         _ => {}
                     }
                 },
+
+                // Unhandled button types
                 _ => {}
             }
+            
         }
+    }
+
+
+    fn game_over(&mut self) {
+        self.game_status = GameStatus::GameOver;
+    }
+
+
+    pub fn pause(&mut self) {
+        self.game_status = GameStatus::Paused;
+    }
+
+
+    pub fn run(&mut self) {
+        self.game_status = GameStatus::Running;
     }
 
 }
@@ -143,13 +179,54 @@ impl GameManager {
 
 impl Drawable for GameManager {
 
-    fn draw(&self, args: &piston::RenderArgs, gl: &mut opengl_graphics::GlGraphics) {
-        self.map.draw(args, gl);
-        self.snake.draw(args, gl);
+    fn draw(&mut self, args: &piston::RenderArgs, gl: &mut opengl_graphics::GlGraphics, window: &mut PistonWindow, event: &piston::Event) {
 
-        if let Some(apple) = &self.apple {
-            apple.draw(args, gl);
+        // Clear the screen
+        clear_screen(gl);
+
+        // Draw the topbar
+        render_text(
+            &format!("Score: {}", self.snake.length),
+            &mut self.font,
+            WindowCoordinates::new(FONT_SIZE as f64, (TOPBAR_HEIGHT + FONT_SIZE as f64) / 2.0),
+            window,
+            event
+        );
+
+        // Draw the game elements
+
+        self.map.draw(args, gl, window, event);
+        self.snake.draw(args, gl, window, event);
+
+        if let Some(apple) = &mut self.apple {
+            apple.draw(args, gl, window, event);
         }
+
+        match self.game_status {
+            GameStatus::GameOver => {
+                let text = "Game Over!";
+                render_text(
+                    text,
+                    &mut self.font,
+                    WindowCoordinates::new((WIN_WIDTH - (FONT_SIZE as f64 * text.len() as f64) / 2.0) / 2.0, (WIN_HEIGHT + FONT_SIZE as f64) / 2.0),
+                    window,
+                    event
+                );
+            },
+            GameStatus::Paused => {
+                let text = "Paused";
+                render_text(
+                    text,
+                    &mut self.font,
+                    WindowCoordinates::new((WIN_WIDTH - (FONT_SIZE as f64 * text.len() as f64) / 2.0) / 2.0, (WIN_HEIGHT + FONT_SIZE as f64) / 2.0),
+                    window,
+                    event
+                );
+            },
+            _ => {}
+            
+        }
+
     }
 
 }

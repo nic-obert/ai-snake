@@ -2,6 +2,7 @@ use graphics::{types::Color, Context};
 use opengl_graphics::GlGraphics;
 use piston::RenderArgs;
 
+use crate::render::render_block;
 use crate::utils::Drawable;
 use crate::consts::*;
 
@@ -87,19 +88,14 @@ impl Map {
 
 impl Drawable for Map {
 
-    fn draw(&self, args: &RenderArgs, gl: &mut GlGraphics) {
+    fn draw(&mut self, args: &RenderArgs, gl: &mut GlGraphics, _window: &mut piston_window::PistonWindow, _event: &piston::Event) {
 
-        gl.draw(args.viewport(), |c: Context, gl: &mut GlGraphics| {
+        gl.draw(args.viewport(), |context: Context, gl: &mut GlGraphics| {
 
             // Draw the world map block by block
             for (y, row) in self.blocks.iter().enumerate() {
                 for (x, block) in row.iter().enumerate() {
-                    let square = graphics::rectangle::square(
-                        (x as f64) * BLOCK_SIZE,
-                        (y as f64) * BLOCK_SIZE,
-                        BLOCK_SIZE
-                    );
-                    graphics::rectangle(block.color(), square, c.transform, gl);
+                    render_block(block.color(), Location::new(x, y), &context, gl)
                 }
             }
 

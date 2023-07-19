@@ -1,8 +1,10 @@
 use graphics::Context;
 use opengl_graphics::GlGraphics;
 use piston::RenderArgs;
+use piston_window::PistonWindow;
 
 use crate::map::Location;
+use crate::render::render_block;
 use crate::utils::Drawable;
 use crate::consts::*;
 
@@ -20,7 +22,7 @@ pub enum Direction {
 
 pub struct Snake {
 
-    length: usize,
+    pub length: usize,
     direction: Direction,
     pub bits: Vec<Location>
 
@@ -78,27 +80,17 @@ impl Snake {
 
 impl Drawable for Snake {
 
-    fn draw(&self, args: &RenderArgs, gl: &mut GlGraphics) {
+    fn draw(&mut self, args: &RenderArgs, gl: &mut GlGraphics, _window: &mut PistonWindow, _event: &piston::Event) {
 
-        gl.draw(args.viewport(), |c: Context, gl: &mut GlGraphics| {
+        gl.draw(args.viewport(), |context: Context, gl: &mut GlGraphics| {
 
             // Draw the head first, as it is of a different color
             let head = self.bits.first().unwrap();
-            let square = graphics::rectangle::square(
-                (head.x as f64) * BLOCK_SIZE,
-                (head.y as f64) * BLOCK_SIZE,
-                BLOCK_SIZE
-            );
-            graphics::rectangle(HEAD_COLOR, square, c.transform, gl);
+            render_block(HEAD_COLOR, *head, &context, gl);
 
             // Draw the rest of the snake
             for bit in self.bits.iter().skip(1) {
-                let square = graphics::rectangle::square(
-                    (bit.x as f64) * BLOCK_SIZE,
-                    (bit.y as f64) * BLOCK_SIZE,
-                    BLOCK_SIZE
-                );
-                graphics::rectangle(BODY_COLOR, square, c.transform, gl);
+                render_block(BODY_COLOR, *bit, &context, gl);
             }
 
         })
