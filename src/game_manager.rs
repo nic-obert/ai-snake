@@ -13,6 +13,7 @@ pub struct GameManager {
     pub snake: Snake,
     map: Map,
     apple: Option<Apple>,
+    last_update: f64,
 
 }
 
@@ -25,18 +26,27 @@ impl GameManager {
         let snake_y = WORLD_HEIGHT / 2;
         let snake = Snake::new(Location::new(snake_x, snake_y));
 
-        let map = Map::new(WORLD_WIDTH, WORLD_HEIGHT, BLOCK_SIZE);
+        let map = Map::new();
 
         GameManager {
             game_over: false,
             snake,
             map,
             apple: None,
+            last_update: 0.0,
         }
     }
 
 
     pub fn update(&mut self, update_args: &piston::UpdateArgs) {
+
+        // Limit update rate
+        self.last_update += update_args.dt;
+        if self.last_update >= UPDATE_DEALY {
+            self.last_update = 0.0;
+        } else {
+            return;
+        }
 
         if self.game_over {
             return;

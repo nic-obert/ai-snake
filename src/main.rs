@@ -7,7 +7,7 @@ mod apple;
 
 use glutin_window::GlutinWindow;
 use opengl_graphics::{GlGraphics, OpenGL};
-use piston::{ButtonEvent, EventLoop};
+use piston::ButtonEvent;
 use piston::event_loop::{EventSettings, Events};
 use piston::input::{RenderEvent, UpdateEvent};
 use piston::window::WindowSettings;
@@ -26,8 +26,7 @@ fn main() {
    
     let mut game_manager = game_manager::GameManager::new();
 
-    let event_settings = EventSettings::new()
-        .ups(UPS);
+    let event_settings = EventSettings::new();
     let mut events = Events::new(event_settings);
     while let Some(e) = events.next(&mut window) {
 

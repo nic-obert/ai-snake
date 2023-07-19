@@ -13,5 +13,6 @@ pub const WALL_COLOR: Color = [0.8, 0.8, 0.8, 1.0];
 pub const VOID_COLOR: Color = [0.0, 0.0, 0.0, 1.0];
 pub const APPLE_COLOR: Color = [1.0, 0.0, 0.0, 1.0];
 
-pub const UPS: u64 = 15;
+pub const STEPS_PER_SECOND: f64 = 15.0;
+pub const UPDATE_DEALY: f64 = 1.0 / STEPS_PER_SECOND;
 

@@ -1,4 +1,5 @@
-use crate::{utils::Drawable, map::Location};
+use crate::utils::Drawable;
+use crate::map::Location;
 use crate::consts::*;
 
 

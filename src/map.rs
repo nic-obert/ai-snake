@@ -49,9 +49,6 @@ impl Block {
 
 pub struct Map {
 
-    width: usize,
-    height: usize,
-    block_size: f64,
     pub blocks: Vec<Vec<Block>>
 
 }
@@ -59,30 +56,27 @@ pub struct Map {
 
 impl Map {
 
-    pub fn new(width: usize, height: usize, block_size: f64) -> Self {
+    pub fn new() -> Self {
 
-        let mut blocks = Vec::with_capacity(height as usize);
+        let mut blocks = Vec::with_capacity(WORLD_HEIGHT as usize);
         
         // Construct the walls when creating the map
 
-        blocks.push(vec![Block::Wall; width as usize]);
+        blocks.push(vec![Block::Wall; WORLD_WIDTH as usize]);
 
-        for _ in 1..height-1 {
-            let mut row = Vec::with_capacity(width as usize);
+        for _ in 1..WORLD_HEIGHT-1 {
+            let mut row = Vec::with_capacity(WORLD_WIDTH as usize);
             row.push(Block::Wall);
-            for _ in 1..width-1 {
+            for _ in 1..WORLD_WIDTH-1 {
                 row.push(Block::Void);
             }
             row.push(Block::Wall);
             blocks.push(row);
         }
 
-        blocks.push(vec![Block::Wall; width as usize]);
+        blocks.push(vec![Block::Wall; WORLD_WIDTH as usize]);
 
         Map {
-            width,
-            height,
-            block_size,
             blocks
         }
 
@@ -101,9 +95,9 @@ impl Drawable for Map {
             for (y, row) in self.blocks.iter().enumerate() {
                 for (x, block) in row.iter().enumerate() {
                     let square = graphics::rectangle::square(
-                        (x as f64) * self.block_size,
-                        (y as f64) * self.block_size,
-                        self.block_size
+                        (x as f64) * BLOCK_SIZE,
+                        (y as f64) * BLOCK_SIZE,
+                        BLOCK_SIZE
                     );
                     graphics::rectangle(block.color(), square, c.transform, gl);
                 }
