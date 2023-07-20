@@ -84,7 +84,7 @@ impl Map {
         loop {
 
             new_location.x = rand::random::<usize>() % WORLD_WIDTH;
-            new_location.y = rand::random::<usize>() % WORLD_HEIGHT;
+            new_location.y = rand::random::<usize>() % MAP_HEIGHT;
 
             if self.get(new_location) == Block::Void {
                 break;
@@ -107,13 +107,13 @@ impl Map {
     /// Create a new complete map with the walls
     pub fn create_new() -> Self {
 
-        let mut blocks = Vec::with_capacity(WORLD_HEIGHT as usize);
+        let mut blocks = Vec::with_capacity(MAP_HEIGHT as usize);
         
         // Construct the walls when creating the map
 
         blocks.push(vec![Block::Wall; WORLD_WIDTH as usize]);
 
-        for _ in 1..WORLD_HEIGHT-1 {
+        for _ in 1..MAP_HEIGHT-1 {
             let mut row = Vec::with_capacity(WORLD_WIDTH as usize);
             row.push(Block::Wall);
             for _ in 1..WORLD_WIDTH-1 {
@@ -176,7 +176,7 @@ impl Map {
 
             // Check if the coordinates are out of bounds
             let y = top_left_y + y as i64;
-            if y < 0 || y >= WORLD_HEIGHT as i64 {
+            if y < 0 || y >= MAP_HEIGHT as i64 {
                 continue;
             }
 

@@ -34,7 +34,7 @@ impl WindowCoordinates {
     pub fn from_map_location(map_location: Location) -> WindowCoordinates {
         WindowCoordinates::new(
             map_location.x as f64 * BLOCK_SIZE,
-            MAP_START_Y + map_location.y as f64 * BLOCK_SIZE
+            MAP_WIDTH + map_location.y as f64 * BLOCK_SIZE
         )
     }
 

@@ -1498,6 +1498,7 @@ name = "snake"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "lazy_static",
  "piston",
  "piston2d-graphics",
  "piston2d-opengl_graphics",

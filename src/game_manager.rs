@@ -33,15 +33,9 @@ pub struct GameManager {
 /// Determines where to spawn a snake taking into account the other snakes
 /// Returns the location where the snake should spawn
 fn determine_snake_spawn_location(index: usize) -> Location {
-
-    // Divide the map into as many sections as the generation size
-    // Spawn the snakes in the center of each section
-
-    // -2 to account for the walls
-    let section_size: f64 = (WORLD_WIDTH - 1) as f64 / GENERATION_SIZE as f64;
-
-    let x: usize = (section_size * index as f64 + section_size / 2.0 + 1.0) as usize;
-    let y: usize = WORLD_HEIGHT / 2;
+    
+    let x: usize = ((index as f64 % *GRID_SIZE) * *SECTION_SIZE_X + *SECTION_SIZE_X / 2.0) as usize;
+    let y: usize = ((index as f64 / *GRID_SIZE).floor() * *SECTION_SIZE_Y + *SECTION_SIZE_Y / 2.0) as usize;
 
     Location::new(x, y)
 }
