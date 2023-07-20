@@ -4,12 +4,13 @@ use piston::RenderArgs;
 
 use crate::render::{render_block, Drawable, WindowCoordinates};
 use crate::consts::*;
+use crate::snake::Direction;
 
 
 pub type SubmapMatrix = [[Block; SIGHT_SIZE]; SIGHT_SIZE];
 
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Location {
 
     pub x: usize,
@@ -27,6 +28,17 @@ impl Location {
         }
     }
 
+
+    /// Returns the new location after moving in the given direction
+    pub fn trans(&self, amount: i64, direction: Direction) -> Self {
+        match direction {
+            Direction::Up => Location::new(self.x, (self.y as i64 - amount) as usize),
+            Direction::Down => Location::new(self.x, (self.y as i64 + amount) as usize),
+            Direction::Left => Location::new((self.x as i64 - amount) as usize, self.y),
+            Direction::Right => Location::new((self.x as i64 + amount) as usize, self.y),
+        }
+    }
+
 }
 
 
@@ -34,7 +46,8 @@ impl Location {
 pub enum Block {
     Void,
     Wall,
-    Snake,
+    SnakeTail,
+    SnakeHead,
     Apple,
 }
 
@@ -45,8 +58,9 @@ impl Block {
         match self {
             Block::Void => VOID_COLOR,
             Block::Wall => WALL_COLOR,
-            Block::Snake => BODY_COLOR,
+            Block::SnakeTail => TAIL_COLOR,
             Block::Apple => APPLE_COLOR,
+            Block::SnakeHead => HEAD_COLOR,
         }
     }
 
@@ -62,7 +76,36 @@ pub struct Map {
 
 impl Map {
 
-    pub fn new() -> Self {
+    // Spawn an apple in a random valid location
+    pub fn spawn_apple(&mut self) {
+
+        let mut new_location = Location::new(0, 0);
+
+        loop {
+
+            new_location.x = rand::random::<usize>() % WORLD_WIDTH;
+            new_location.y = rand::random::<usize>() % WORLD_HEIGHT;
+
+            if self.get(new_location) == Block::Void {
+                break;
+            }
+        }
+
+        self.set_apple_block(new_location);
+
+    }
+
+
+    /// Create a new empty map, used as a placeholder
+    pub fn empty_new() -> Self {
+        Self {
+            blocks: Vec::new()
+        }
+    }
+
+
+    /// Create a new complete map with the walls
+    pub fn create_new() -> Self {
 
         let mut blocks = Vec::with_capacity(WORLD_HEIGHT as usize);
         
@@ -89,14 +132,21 @@ impl Map {
     }
 
 
+    /// Returns the block at the given location
     pub fn get(&self, location: Location) -> Block {
         self.blocks[location.y][location.x]
     }
 
 
-    /// Sets the given location as blocked by the snake
-    pub fn set_snake_block(&mut self, location: Location) {
-        self.blocks[location.y][location.x] = Block::Snake;
+    /// Sets the given location as blocked by the snake head
+    pub fn set_head_block(&mut self, location: Location) {
+        self.blocks[location.y][location.x] = Block::SnakeHead;
+    }
+
+
+    /// Sets the given location as blocked by the snake tail
+    pub fn set_tail_block(&mut self, location: Location) {
+        self.blocks[location.y][location.x] = Block::SnakeTail;
     }
 
 
@@ -151,7 +201,7 @@ impl Map {
 
 impl Drawable for Map {
 
-    fn draw(&mut self, args: &RenderArgs, gl: &mut GlGraphics, _window: &mut piston_window::PistonWindow, _event: &piston::Event) {
+    fn draw(&self, args: &RenderArgs, gl: &mut GlGraphics, _window: &mut piston_window::PistonWindow, _event: &piston::Event) {
 
         gl.draw(args.viewport(), |context: Context, gl: &mut GlGraphics| {
 

@@ -1,17 +1,17 @@
-use piston_window::{Glyphs, PistonWindow};
-use rand::Rng;
 
-use crate::render::{render_text, WindowCoordinates, clear_screen, render_submap_matrix, render_borders};
-use crate::snake::{Snake, Direction};
-use crate::map::{Map, Location, Block};
-use crate::apple::Apple;
+use opengl_graphics::TextureSettings;
+use piston_window::{Glyphs, PistonWindow};
+
+use crate::brain::Brain;
+use crate::render::{render_text, WindowCoordinates, clear_screen};
+use crate::snake::Snake;
+use crate::map::{Map, Location};
 use crate::render::Drawable;
-use crate::consts::*;
+use crate::{consts::*, font_path};
 
 
 enum GameStatus {
 
-    GameOver,
     Running,
     Paused,
 
@@ -21,114 +21,283 @@ enum GameStatus {
 pub struct GameManager {
 
     game_status: GameStatus,
-    pub snake: Snake,
     map: Map,
-    apple: Option<Apple>,
     last_update: f64,
     font: Glyphs,
+    generation_count: usize,
+    snakes: Vec<Snake>,
 
+}
+
+
+/// Determines where to spawn a snake taking into account the other snakes
+/// Returns the location where the snake should spawn
+fn determine_snake_spawn_location(index: usize) -> Location {
+
+    // Divide the map into as many sections as the generation size
+    // Spawn the snakes in the center of each section
+
+    // -2 to account for the walls
+    let section_size: f64 = (WORLD_WIDTH - 1) as f64 / GENERATION_SIZE as f64;
+
+    let x: usize = (section_size * index as f64 + section_size / 2.0 + 1.0) as usize;
+    let y: usize = WORLD_HEIGHT / 2;
+
+    Location::new(x, y)
 }
 
 
 impl GameManager {
 
-    pub fn new(font: Glyphs) -> Self {
+    fn internal_initialize(&mut self, initialize_snakes: bool) {
 
-        let snake_x = WORLD_WIDTH / 2;
-        let snake_y = WORLD_HEIGHT / 2;
-        let snake = Snake::new(Location::new(snake_x, snake_y));
+        self.game_status = GameStatus::Running;
 
-        let map = Map::new();
+        self.map = Map::create_new();
 
-        GameManager {
-            game_status: GameStatus::Running,
-            snake,
-            map,
-            apple: None,
-            last_update: 0.0,
-            font,
+        if initialize_snakes {
+
+            let mut snakes = Vec::with_capacity(GENERATION_SIZE);
+
+            for i in 0..GENERATION_SIZE {
+                snakes.push(Snake::spawn_new(
+                    determine_snake_spawn_location(i),
+                    &mut self.map
+                ));
+            }
+
+        }
+
+        for _ in 0..MAX_APPLES {
+            self.map.spawn_apple();
+        }
+
+    }
+
+
+    /// Initialize the game manager and the game
+    pub fn initialize(&mut self) {
+        self.internal_initialize(true);
+    }
+
+
+    /// Save the current generation to a file
+    fn save_generation(&self) {
+        use std::fs::File;
+        use std::io::Write;
+
+        let file_name = format!("Gen_{}_{}.gen.json", self.generation_count, chrono::Local::now().format("%Y-%m-%d_%H-%M-%S"));
+
+        let mut file = File::create(&file_name).expect(
+            "Failed to create generation file"
+        );
+
+        let brains: Vec<&Brain> = self.snakes.iter().map(|x| &x.brain).collect();
+
+        let json = serde_json::to_string_pretty(&brains).expect(
+            "Failed to serialize the brains"
+        );
+
+        file.write_all(json.as_bytes()).expect(
+            "Failed to write to generation file"
+        );
+
+        println!("Generation {} saved to file \"{}\"", self.generation_count, file_name);
+    }
+
+    
+    /// Reset the game and the generation
+    fn reset_all(&mut self) {
+        self.reset_game();
+        self.generation_count = 1;
+        self.snakes.clear();
+        
+        for i in 0..GENERATION_SIZE {
+            self.snakes.push(Snake::spawn_new(
+                determine_snake_spawn_location(i),
+                &mut self.map
+            ));
         }
     }
 
 
-    pub fn update(&mut self, update_args: &piston::UpdateArgs) {
+    /// Selects the best snakes among the current generation
+    /// Keeps the longest snakes and discards the short ones
+    /// Empties the snakes vector and returns the selected snakes
+    fn select_best_snakes(&mut self) -> Vec<Snake> {
 
-        // Limit update rate
-        self.last_update += update_args.dt;
-        if self.last_update >= UPDATE_DEALY {
-            self.last_update = 0.0;
-        } else {
-            return;
+        // Discard the short snakes
+        self.snakes.retain(|x| x.length() > INITIAL_SNAKE_LENGTH);
+
+        // Sort the snakes by length in descending order
+        self.snakes.sort_by(|a, b| b.length().cmp(&a.length()));
+
+        // Keep only the longest snakes
+        self.snakes.truncate(GENERATION_CARRYOVER);
+
+        self.snakes.drain(..).collect()
+    }
+
+
+    /// Pass to the next generation and reset the game
+    fn next_generation(&mut self) {
+
+        // Increment the generation counter
+        self.generation_count += 1;
+
+        println!("\nGeneration: {}\n", self.generation_count);
+
+        // Select the snakes to breed and repopulate the generation
+        let mut best_snakes = self.select_best_snakes();
+
+        println!("Good snakes in this generation: {}", best_snakes.len());
+        for (i, snake) in best_snakes.iter().enumerate() {
+            println!("{}. Snake length: {}", i+1, snake.length());
         }
+        println!();
+
+        if best_snakes.is_empty() {
+            // If there are no good snakes, repopulate the generation with new random snakes
+            for _ in 0..GENERATION_SIZE {
+                self.snakes.push(
+                    Snake::spawn_new(
+                        determine_snake_spawn_location(self.snakes.len()),
+                        &mut self.map
+                    ));
+            }
+
+        } else {
+            // If there are good snakes, repopulate the generation with offsprings of the best snakes
+            while self.snakes.len() < GENERATION_SIZE - best_snakes.len() {
+                for snake in best_snakes.iter() {
+                    self.snakes.push(snake.spawn_offspring(
+                        determine_snake_spawn_location(self.snakes.len()),
+                        &mut self.map
+                    ));
+                }
+            }
+
+            // Add the best snakes from the previous generation to the new generation
+            self.snakes.append(&mut best_snakes);
+        }
+
+        self.reset_game();
+
+    }
+
+
+    /// Reset game parameters and the map
+    fn reset_game(&mut self) {
+        self.last_update = 0.0;
+        self.map = Map::create_new();
+
+        // Respawn the apples
+        for _ in 0..MAX_APPLES {
+            self.map.spawn_apple();
+        }
+    }
+
+
+    pub fn initialize_from_file(&mut self, path: &str) {
+
+        // Load the json file
+        let json = std::fs::read_to_string(path).expect(
+            format!("Failed to read the file: {:?}", path).as_str()
+        );
+
+        // Deserialize the json file
+        let brains: Vec<Brain> = serde_json::from_str(&json).expect(
+            format!("Failed to deserialize the json file: {:?}", path).as_str()
+        );
+
+        // Initialize the game manager
+        self.internal_initialize(false);
+
+        // Create the snakes from the brains
+        for brain in brains {
+            self.snakes.push(Snake::spawn_with_brain(
+                brain,
+                determine_snake_spawn_location(self.snakes.len()),
+                &mut self.map
+            ));
+        }
+
+        println!("Loaded generation from file: {:?}", path)
+
+    }
+
+
+    pub fn new(window: &mut PistonWindow) -> Self {
+
+        let font = include_bytes!(font_path!());
+
+        let glyphs = Glyphs::from_bytes(
+            font,
+            window.create_texture_context(),
+            TextureSettings::new(),
+        ).unwrap();
+
+        Self {
+            game_status: GameStatus::Running,
+            snakes: Vec::new(),
+            map: Map::empty_new(),
+            last_update: 0.0,
+            font: glyphs,
+            generation_count: 1,
+        }
+    }
+
+
+    /// Limits the update rate to a fixed rate
+    /// Takes into account the game state to determine if the game should be updated
+    /// Returns true if the game should be updated
+    /// Returns false if the game should not be updated
+    fn tick(&mut self, update_args: &piston::UpdateArgs) -> bool {
 
         // Don't update the game if it's not running
         if !matches!(self.game_status, GameStatus::Running) {
+            return false;
+        }
+
+        self.last_update += update_args.dt;
+        if self.last_update >= UPDATE_DEALY {
+            self.last_update = 0.0;
+            true
+        } else {
+            false
+        }
+    }
+
+
+    /// Update the game 
+    pub fn update(&mut self, update_args: &piston::UpdateArgs) {
+
+        // Limit the update rate
+        if !self.tick(update_args) {
             return;
         }
 
-        // Update the snake
+        // Update the game elements
+        let mut population_count: usize = 0;
+        for snake in &mut self.snakes {
 
-        // Extract the submap around the snake's head
-        self.snake.sight = Box::new(self.map.get_submap(self.snake.bits[0]));
-
-        match self.snake.advance_and_update_map(&mut self.map) {
-            Ok(..) => {},
-            Err(..) => {
-                // Snake collided with the wall
-                self.game_over();
-                return;
+            if snake.alive {
+                population_count += 1;
+                snake.act(&mut self.map);
             }
+            
         }
 
-        // Check for other collisions
-
-        // Snake collided with itself
-        let head = self.snake.bits[0];
-        for bit in self.snake.bits.iter().skip(1) {
-            if *bit == head {
-                self.game_over();
-                return;
-            }
-        }
-
-        // Snake collided with the apple
-        if let Some(apple) = &self.apple {
-            if self.snake.bits[0] == apple.location {
-                self.snake.add_bit();
-                self.map.free_block(apple.location);
-                self.apple = None;
-            }
-        }
-
-        // Spawn an apple if there isn't one
-        if self.apple.is_none() {
-            let mut rng = rand::thread_rng();
-
-            loop {
-
-                let x = rng.gen_range(0..WORLD_WIDTH);
-                let y = rng.gen_range(0..WORLD_HEIGHT);
-                let location = Location::new(x, y);
-
-                // Check if the apple is in a valid location (not in a wall or the snake)
-                if self.map.blocks[y][x] == Block::Wall {
-                    continue;
-                }
-                for bit in self.snake.bits.iter() {
-                    if bit == &location {
-                        continue;
-                    }
-                }
-
-                self.apple = Some(Apple::new(location));
-                self.map.set_apple_block(location);
-                break;
-            }
+        // Check if the game is over, if so, pass to the next generation
+        if population_count == 0 {
+            std::thread::sleep(NEXT_GENERATION_DELAY);
+            self.next_generation();
         }
 
     }
 
 
+    /// Handle user input
     pub fn handle_input(&mut self, args: &piston::ButtonArgs) {
         use piston::input::Key;
 
@@ -136,19 +305,17 @@ impl GameManager {
             match args.button {
                 piston::input::Button::Keyboard(key) => {
                     match key {
-                        Key::W => self.snake.set_direction(Direction::Up),
-                            
-                        Key::S => self.snake.set_direction(Direction::Down),
-
-                        Key::A => self.snake.set_direction(Direction::Left),
-
-                        Key::D => self.snake.set_direction(Direction::Right),
                         
                         Key::Space => match self.game_status {
                             GameStatus::Running => self.pause(),
-                            GameStatus::Paused => self.run(),
-                            _ => {}
+                            GameStatus::Paused => self.unpause(),
                         }
+
+                        Key::Return => self.next_generation(),
+
+                        Key::R => self.reset_all(),
+
+                        Key::S => self.save_generation(),
                         
                         // Unhandled keys
                         _ => {}
@@ -163,33 +330,27 @@ impl GameManager {
     }
 
 
-    fn game_over(&mut self) {
-        self.game_status = GameStatus::GameOver;
-    }
-
-
-    pub fn pause(&mut self) {
+    /// Pause the game
+    fn pause(&mut self) {
         self.game_status = GameStatus::Paused;
     }
 
 
-    pub fn run(&mut self) {
+    /// Unpause the game
+    fn unpause(&mut self) {
         self.game_status = GameStatus::Running;
     }
 
-}
 
-
-impl Drawable for GameManager {
-
-    fn draw(&mut self, args: &piston::RenderArgs, gl: &mut opengl_graphics::GlGraphics, window: &mut PistonWindow, event: &piston::Event) {
+    /// Draw the game on the screen
+    pub fn draw(&mut self, args: &piston::RenderArgs, gl: &mut opengl_graphics::GlGraphics, window: &mut PistonWindow, event: &piston::Event) {
 
         // Clear the screen
         clear_screen(gl);
 
         // Draw the topbar
         render_text(
-            &format!("Score: {}", self.snake.length),
+            &format!("Generation: {}", self.generation_count),
             &mut self.font,
             WindowCoordinates::new(FONT_SIZE as f64, (TOPBAR_HEIGHT + FONT_SIZE as f64) / 2.0),
             window,
@@ -199,69 +360,24 @@ impl Drawable for GameManager {
         // Draw the game elements
 
         self.map.draw(args, gl, window, event);
-        self.snake.draw(args, gl, window, event);
-
-        if let Some(apple) = &mut self.apple {
-            apple.draw(args, gl, window, event);
-        }
 
         match self.game_status {
-            GameStatus::GameOver => {
-                let text = "Game Over!";
-                render_text(
-                    text,
-                    &mut self.font,
-                    WindowCoordinates::new((WIN_WIDTH - (FONT_SIZE as f64 * text.len() as f64) / 2.0) / 2.0, (WIN_HEIGHT + FONT_SIZE as f64) / 2.0),
-                    window,
-                    event
-                );
-            },
             GameStatus::Paused => {
                 let text = "Paused";
                 render_text(
                     text,
                     &mut self.font,
-                    WindowCoordinates::new((WIN_WIDTH - (FONT_SIZE as f64 * text.len() as f64) / 2.0) / 2.0, (WIN_HEIGHT + FONT_SIZE as f64) / 2.0),
+                    WindowCoordinates::new(
+                        (WIN_WIDTH - (FONT_SIZE as f64 * text.len() as f64) / 2.0) / 2.0,
+                        (WIN_HEIGHT + FONT_SIZE as f64) / 2.0
+                    ),
                     window,
                     event
                 );
             },
             _ => {}
             
-        }
-
-        // Draw the submap on the side panel
-
-        let submap_start_x = SIDE_PANEL_START_X + 50.0;
-        let submap_start_y = MAP_START_Y + FONT_SIZE as f64 + 50.0;
-        
-        render_text(
-            "Input",
-            &mut self.font,
-            WindowCoordinates::new(submap_start_x, submap_start_y - FONT_SIZE as f64),
-            window,
-            event
-        );
-
-        render_borders(
-            submap_start_x, 
-            submap_start_y,
-            submap_start_x + SUBMAP_BLOCK_SIZE * SIGHT_SIZE as f64,
-            submap_start_y + SUBMAP_BLOCK_SIZE * SIGHT_SIZE as f64,
-            SUBMAP_BORDER_THICKNESS,
-            SUBMAP_BORDER_COLOR,
-            window,
-            event
-        );
-
-        render_submap_matrix(
-            &self.snake.sight,
-            WindowCoordinates::new(submap_start_x, submap_start_y),
-            window,
-            event
-        );
-
-        
+        }        
 
     }
 
